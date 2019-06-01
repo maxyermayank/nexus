@@ -1,0 +1,13 @@
+nexus:
+  image:
+    repository: sonatype/nexus3
+    tag: latest
+  context: nexus
+  port: 8081
+  replicas: 1
+
+ingress:
+  host: test.company.com
+  path: /
+  network: traefik
+

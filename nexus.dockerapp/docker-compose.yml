@@ -1,0 +1,89 @@
+version: "3.7"
+
+services:
+  nexus:
+    image: ${nexus.image.repository}:${nexus.image.tag}
+    environment: 
+      NEXUS_CONTEXT: ${nexus.context}
+    volumes:
+      - type: volume
+        source: nexus-data
+        target: /nexus-data
+    # configs: 
+    #   - source: nexus_config
+    #     target: /opt/sonatype-work/nexus/conf/nexus.xml
+    deploy:
+      replicas: ${nexus.replicas}
+      labels:
+        traefik.protocol: http
+        traefik.port: '${nexus.port}'
+        traefik.frontend.entryPoints: http,https
+        traefik.frontend.rule: "Host:${ingress.host};PathPrefixStrip:${ingress.path}"
+        traefik.docker.network: ${ingress.network}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 10s
+      update_config:
+        parallelism: 1
+        failure_action: rollback
+        delay: 15s
+    networks:
+      - app
+      - traefik
+  traefik:
+    image: traefik:v1.7.9-alpine
+    command:
+      - --logLevel=DEBUG
+      # - --entryPoints=Name:http Address::80 Redirect.EntryPoint:https
+      # - --entryPoints=Name:https Address::443 TLS:/run/secrets/signedcert,/run/secrets/signedkey
+      - --insecureskipverify
+      - --docker
+      - --docker.endpoint=unix:///var/run/docker.sock
+      - --docker.swarmmode
+      - --docker.tls=false
+      - --docker.watch
+      - --docker.network=traefik
+      - --api
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    networks:
+      - traefik
+    ports:
+      - mode: ingress
+        protocol: tcp
+        published: 80
+        target: 80
+      - mode: ingress
+        protocol: tcp
+        published: 443
+        target: 443
+      - mode: ingress
+        protocol: tcp
+        published: 8080
+        target: 8080
+    # secrets:
+    #   - source: signedcert
+    #   - source: signedkey
+    volumes:
+      - source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        type: bind
+
+volumes:
+  nexus-data:
+
+networks:
+  app:
+  traefik:
+    driver: overlay
+    name: traefik
+    external: true
+
+# configs: 
+#   nexus_config:
+#     file: configs/nexus.xml
